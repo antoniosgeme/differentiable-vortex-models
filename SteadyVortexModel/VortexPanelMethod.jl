@@ -1,6 +1,10 @@
 using Plots
 plotly()
 
+
+using .Singularities
+using .AirfoilModule
+
 function Plots.plot(airfoil::Airfoil)
     plot(airfoil.x,airfoil.y,aspect_ratio=:equal,legend=false)
 end 
@@ -10,12 +14,10 @@ function Plots.scatter(airfoil::Airfoil,ms=3)
 end 
 
 
-using .Singularities
-using .AirfoilModule
 
 
 airfoil = Airfoil("naca6409")
-repanel!(airfoil,10)
+#repanel!(airfoil,10)
 set_angle_of_attack!(airfoil,20)
 scatter(airfoil)
 
