@@ -9,32 +9,32 @@ abstract type PointSingularity <: Singularity end
 abstract type LineSingularity <: Singularity end 
 
 
-struct LinearStrengthLineVortex <: LineSingularity
+struct LinearStrengthLineVortex{T} <: LineSingularity
     """
     A linear strength line vortex starting at (x_start,y_start)
     with strength γ_start and ending at (x_end,y_end) with strength
     γ_end. 
     """
-    x_start::Float64
-    y_start::Float64
-    x_end::Float64
-    y_end::Float64
-    γ_start::Float64
-    γ_end::Float64
+    x_start::T
+    y_start::T
+    x_end::T
+    y_end::T
+    γ_start::T  
+    γ_end::T
 end 
 
-struct LinearStrengthLineSource <: LineSingularity
+struct LinearStrengthLineSource{T} <: LineSingularity
     """
     A linear strength line vortex starting at (x_start,y_start)
     with strength γ_start and ending at (x_end,y_end) with strength
     γ_end. 
     """
-    x_start::Float64
-    y_start::Float64
-    x_end::Float64
-    y_end::Float64
-    σ_start::Float64
-    σ_end::Float64
+    x_start::T
+    y_start::T
+    x_end::T
+    y_end::T
+    σ_start::T
+    σ_end::T
 end
 
 #length(::LinearStrengthLineVortex) = 1
