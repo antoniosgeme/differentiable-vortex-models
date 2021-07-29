@@ -2,7 +2,7 @@ module AirfoilModule
 
 export Airfoil,get_upper_coordinates,get_lower_coordinates,scale!,get_area,get_chord,get_centroid,set_angle_of_attack!,write_file,repanel!,sharp_trailing_edge
 
-using Dierckx
+#using Dierckx
 using Printf
 
 mutable struct Airfoil
