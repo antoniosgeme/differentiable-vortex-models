@@ -4,6 +4,7 @@ export Airfoil,get_upper_coordinates,get_lower_coordinates,scale!,get_area,get_c
 
 #using Dierckx
 using Printf
+using Plots
 
 mutable struct Airfoil
     "Name of the airfoil eg naca0012"
@@ -268,6 +269,15 @@ function write_file(airfoil::Airfoil)
         end
     end
 end
+
+function Plots.plot(airfoil::Airfoil)
+    plot(airfoil.x,airfoil.y,aspect_ratio=:equal,legend=false)
+end 
+
+function Plots.scatter(airfoil::Airfoil,ms=3)
+    scatter(airfoil.x,airfoil.y,aspect_ratio=:equal,legend=false,ms=ms)
+end 
+
 
 sharp_trailing_edge(airfoil::Airfoil) =  isapprox(0,airfoil.y[1]-airfoil.y[end],atol=1e-10)
 
