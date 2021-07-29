@@ -2,46 +2,47 @@
 module Singularities
 
 
-export LinearStrengthLineVortex,LinearStrengthLineSource,induced_velocity
+export LinearStrengthLineVortex,LinearStrengthLineSource,induced_velocity,SingularityCollection
 
 abstract type Singularity end
 abstract type PointSingularity <: Singularity end 
 abstract type LineSingularity <: Singularity end 
 
 
-struct LinearStrengthLineVortex{T} <: LineSingularity
+struct LinearStrengthLineVortex{A,B,C,D,E,F} <: LineSingularity
     """
     A linear strength line vortex starting at (x_start,y_start)
     with strength γ_start and ending at (x_end,y_end) with strength
     γ_end. 
     """
-    x_start::T
-    y_start::T
-    x_end::T
-    y_end::T
-    γ_start::T  
-    γ_end::T
+    x_start::A
+    y_start::B
+    x_end::C
+    y_end::D
+    γ_start::E 
+    γ_end::F
 end 
 
-struct LinearStrengthLineSource{T} <: LineSingularity
+struct LinearStrengthLineSource{A,B,C,D,E,F} <: LineSingularity
     """
     A linear strength line vortex starting at (x_start,y_start)
     with strength γ_start and ending at (x_end,y_end) with strength
     γ_end. 
     """
-    x_start::T
-    y_start::T
-    x_end::T
-    y_end::T
-    σ_start::T
-    σ_end::T
+    x_start::A
+    y_start::B
+    x_end::C
+    y_end::D
+    σ_start::E
+    σ_end::F
 end
 
-#length(::LinearStrengthLineVortex) = 1
-#length(::LinearStrengthLineSource) = 1
-
-#ase.iterate(S::LinearStrengthLineVortex) = nothing 
-#Base.iterate(S::LinearStrengthLineSource) = nothing
+Base.Broadcast.broadcastable(a::LinearStrengthLineVortex) = Ref(a)
+Base.Broadcast.broadcastable(a::LinearStrengthLineSource) = Ref(a)
+Base.Broadcast.broadcastable(a::SingularityCollection) = Ref(a)
+mutable struct SingularityCollection
+    singularities::Vector{<:Singularity}
+end 
 
 singularity_length(singularity::T where T<:LineSingularity) = sqrt((singularity.x_end - singularity.x_start)^2 +  (singularity.y_end - singularity.y_start)^2)
 
@@ -73,7 +74,7 @@ function induced_velocity_panel_coordinates(xₚ_target,yₚ_target,source::Line
 
     uₚ = is_on_endpoint ? 0 : uₚ
     vₚ = is_on_endpoint ? 0 : vₚ
-
+    
     return uₚ,vₚ
 end 
 
@@ -106,7 +107,26 @@ function induced_velocity_panel_coordinates(xₚ_target,yₚ_target,source::Line
     return uₚ,vₚ
 end 
 
-function induced_velocity(x_target::Real,y_target::Real,source::LinearStrengthLineVortex)
+function induced_velocity(x_target,y_target,source::LinearStrengthLineVortex)
+    dx_panel = source.x_end - source.x_start
+    dy_panel = source.y_end - source.y_start
+    panel_length = sqrt(dx_panel^2 + dy_panel^2)
+    xₚ_hat_x = dx_panel/panel_length
+    xₚ_hat_y = dy_panel/panel_length
+    yₚ_hat_x = - xₚ_hat_y
+    yₚ_hat_y = xₚ_hat_x
+    x_target_relative = x_target - source.x_start
+    y_target_relative = y_target - source.y_start
+    xₚ_target = x_target_relative * xₚ_hat_x + y_target_relative * xₚ_hat_y
+    yₚ_target = y_target_relative * yₚ_hat_x + y_target_relative * yₚ_hat_y
+    uₚ,vₚ = induced_velocity_panel_coordinates(xₚ_target,yₚ_target,source)
+    u = uₚ * xₚ_hat_x + vₚ * yₚ_hat_x
+    v = uₚ * xₚ_hat_y + vₚ * yₚ_hat_y
+    println(u)
+    return u,v
+end
+
+function induced_velocity(x_target,y_target,source::LinearStrengthLineSource)
     dx_panel = source.x_end - source.x_start
     dy_panel = source.y_end - source.y_start
     panel_length = sqrt(dx_panel^2 + dy_panel^2)
@@ -124,43 +144,15 @@ function induced_velocity(x_target::Real,y_target::Real,source::LinearStrengthLi
     return u,v
 end
 
-function induced_velocity(x_target::Real,y_target::Real,source::LinearStrengthLineSource)
-    dx_panel = source.x_end - source.x_start
-    dy_panel = source.y_end - source.y_start
-    panel_length = sqrt(dx_panel^2 + dy_panel^2)
-    xₚ_hat_x = dx_panel/panel_length
-    xₚ_hat_y = dy_panel/panel_length
-    yₚ_hat_x = - xₚ_hat_y
-    yₚ_hat_y = xₚ_hat_x
-    x_target_relative = x_target - source.x_start
-    y_target_relative = y_target - source.y_start
-    xₚ_target = x_target_relative * xₚ_hat_x + y_target_relative * xₚ_hat_y
-    yₚ_target = y_target_relative * yₚ_hat_x + y_target_relative * yₚ_hat_y
-    uₚ,vₚ = induced_velocity_panel_coordinates(xₚ_target,yₚ_target,source)
-    u = uₚ * xₚ_hat_x + vₚ * yₚ_hat_x
-    v = uₚ * xₚ_hat_y + vₚ * yₚ_hat_y
-    return u,v
-end
-
-function induced_velocity(x_target::Array{<:Real},y_target::Array{<:Real},source::LinearStrengthLineSource)
+function induced_velocity(x_target,y_target,source::SingularityCollection)
     u,v = 0,0
-    for i in 1:length(x_target)
-        u_temp,v_temp = induced_velocity(x_target[i],y_target[i],source)
-        u += u_temp
-        v += v_temp
+    for singularity in source.singularities
+        u,v = induced_velocity(x_target,y_target,singularity)
     end 
     return u,v
 end 
 
-function induced_velocity(x_target::Array{<:Real},y_target::Array{<:Real},source::LinearStrengthLineVortex)
-    u,v = 0,0
-    for i in 1:length(x_target)
-        u_temp,v_temp = induced_velocity(x_target[i],y_target[i],source)
-        u += u_temp
-        v += v_temp
-    end 
-    return u,v
-end 
+
 
 end 
 
