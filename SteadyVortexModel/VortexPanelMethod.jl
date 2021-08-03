@@ -51,7 +51,9 @@ struct OperatingPoint
 end 
 
 OperatingPoint(u) = OperatingPoint(u,0)
-
+VortexPoint(a,b,c,d,e,f) = VortexPoint(a,b,c,d,e,f,1)
+SourcePoint(a,b,c,d,e,f) = SourcePoint(a,b,c,d,e,f,1)
+ 
 function induced_velocity(target::CollocationPoint,source::VortexPoint; unit_forcing=true)
         A = [0 1
             -1 0]
@@ -106,23 +108,61 @@ function enforce_no_throughflow!(body::Body,op::OperatingPoint)
 end 
 
 function construct_geometry(airfoil::Airfoil)
-    if sharp_trailing_edge(airfoil)
-        dx_panels = diff(airfoil.x)
-        dy_panels = diff(airfoil.y)
-    else 
-        dx_panels = airfoil.x - circshift(airfoil.x,-1)
-        dy_panels = airfoil.y - circshift(airfoil.y,-1)
-    end 
+    dx_panels = airfoil.x - circshift(airfoil.x,-1)
+    dy_panels = airfoil.y - circshift(airfoil.y,-1)
+    sharp_trailing_edge(airfoil) ? begin pop!(dx_panels)
+                                         pop!(dy_panels) 
+                                    end : nothing     
+    
     panel_lengths = hypot.(dx_panels , dy_panels)
     x_normal = -dy_panels ./ panel_lengths
     y_normal = dx_panels ./ panel_lengths
     y_tangent = - copy(x_normal)
     x_tangent = copy(y_normal) 
+    x_midpoints, y_midpoints = compute_midpoints(airfoil)
+    collocations = CollocationPoint.(   
+                                    x_midpoints,
+                                    y_midpoints,
+                                    x_normal,
+                                    y_normal,
+                                    x_tangent,
+                                    y_tangent
+                                    )
+    if sharp_trailing_edge(airfoil)
+        vortices = VortexPoint.(
+                                airfoil.x,
+                                airfoil.y,
+                                push!(x_normal,x_normal[end]),
+                                push!(y_normal,y_normal[end]),
+                                push!(x_tangent,x_tangent[end]),
+                                push!(y_tangent,y_tangent[end]),
+                                )  
+    else 
+        vortices = VortexPoint.(airfoil.x,
+                                airfoil.y,
+                                push!(x_normal[1:end-1],x_normal[end-1]),
+                                push!(y_normal[1:end-1],y_normal[end-1]),
+                                push!(x_tangent[1:end-1],x_tangent[end-1]),
+                                push!(y_tangent[1:end-1],y_tangent[end-1]),
+                                )  
+        #= 
+        source = SourcePoint(
+                            x_midpoints[end],
+                            y_midpoints[end],
+                            x_normal[end],
+                            y_normal[end],
+                            x_tangent[end],
+                            y_tangent[end])
+        =#
+        
+    end 
+
+
     return x_normal, y_normal, x_tangent, y_tangent
 end 
 
 
-function compute_collocation_points(airfoil::Airfoil)
+function compute_midpoints(airfoil::Airfoil)
     if sharp_trailing_edge(airfoil)
         x_midpoints = (airfoil.x[2:end] +  airfoil.x[1:end-1])/2  
         y_midpoints = (airfoil.y[2:end] +  airfoil.y[1:end-1])/2
@@ -143,7 +183,7 @@ naca = Airfoil("naca6409",sharp_trailing_edge=true)
 x_normal, y_normal, x_tangent, y_tangent = construct_geometry(naca)
 x_midpoints, y_midpoints = compute_collocation_points(naca)
 
-
+##
 
 plt.figure()
 plt.plot(naca.x,naca.y)
@@ -151,3 +191,4 @@ plt.quiver(x_midpoints,y_midpoints,x_normal,y_normal,scale=20)
 #plt.quiver(x_midpoints,y_midpoints,x_tangent,y_tangent,scale=20)
 plt.axis("equal")
 
+##

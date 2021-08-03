@@ -1,6 +1,8 @@
-#include("AirfoilModule.jl")
+include("AirfoilModule.jl")
 using .AirfoilModule
 
+using Plots
+plotly() 
 
 function compute_collocation_points(airfoil::Airfoil)
     x_midpoints = (airfoil.x + circshift(airfoil.x,-1))/2 
@@ -55,7 +57,6 @@ function compute_panel_unit_vectors(airfoil::Airfoil)
     xₚ_hat_y = dy_panel ./ panel_length
     yₚ_hat_x = -xₚ_hat_y
     yₚ_hat_y = xₚ_hat_x
-
     return xₚ_hat_x,xₚ_hat_y,yₚ_hat_x,yₚ_hat_y
 end 
 
@@ -64,9 +65,12 @@ end
 airfoil = Airfoil("naca6409")
 set_angle_of_attack!(airfoil,20)
 scatter(airfoil)
+x_midpoints,y_midpoints = compute_collocation_points(airfoil)
+xₚ_hat_x,xₚ_hat_y,yₚ_hat_x,yₚ_hat_y = compute_panel_unit_vectors(airfoil)
+
 
 N = length(airfoil.x)
 A = zeros(N+1,N+1)
-for i in 1:N
-    for j in 1:N
+
+
 

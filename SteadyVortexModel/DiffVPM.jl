@@ -44,6 +44,9 @@ struct LinearStrengthLineVortex{A,B,C,D,E,F} <: LineSingularity
     γ_end::F
 end 
 
+
+
+
 struct LinearStrengthLineSource{A,B,C,D,E,F} <: LineSingularity
     """
     A linear strength line vortex starting at (x_start,y_start)
@@ -59,6 +62,7 @@ struct LinearStrengthLineSource{A,B,C,D,E,F} <: LineSingularity
 end
 
 function induced_velocity(target::Panel,source::LinearStrengthLineVortex; unit_forcing=true)
+    x_target,y_target = get_midpoint(target)
     dx_panel = source.x_end - source.x_start
     dy_panel = source.y_end - source.y_start
     panel_length = hypot(dx_panel , dy_panel)
@@ -66,8 +70,8 @@ function induced_velocity(target::Panel,source::LinearStrengthLineVortex; unit_f
     xₚ_hat_y = dy_panel/panel_length
     yₚ_hat_x = - xₚ_hat_y
     yₚ_hat_y = xₚ_hat_x
-    x_target_relative = target.x_target - source.x_start
-    y_target_relative = target.y_target - source.y_start
+    x_target_relative = x_target - source.x_start
+    y_target_relative = y_target - source.y_start
     xₚ_target = x_target_relative * xₚ_hat_x + y_target_relative * xₚ_hat_y
     yₚ_target = y_target_relative * yₚ_hat_x + y_target_relative * yₚ_hat_y
 
@@ -93,5 +97,103 @@ function induced_velocity(target::Panel,source::LinearStrengthLineVortex; unit_f
     return uᵃ,vᵃ,uᵇ,vᵇ
 end 
 
+function induced_velocity(target::Panel,source::LinearStrengthLineSource; unit_forcing=true)
+    x_target,y_target = get_midpoint(target)
+    dx_panel = source.x_end - source.x_start
+    dy_panel = source.y_end - source.y_start
+    panel_length = hypot(dx_panel , dy_panel)
+    xₚ_hat_x = dx_panel/panel_length
+    xₚ_hat_y = dy_panel/panel_length
+    yₚ_hat_x = - xₚ_hat_y
+    yₚ_hat_y = xₚ_hat_x
+    x_target_relative = x_target - source.x_start
+    y_target_relative = y_target - source.y_start
+    xₚ_target = x_target_relative * xₚ_hat_x + y_target_relative * xₚ_hat_y
+    yₚ_target = y_target_relative * yₚ_hat_x + y_target_relative * yₚ_hat_y
 
-function create_panel(x_start,y_start,x_end,y_end)
+    r₁ = hypot(xₚ_target, yₚ_target)
+    r₂ = hypot((xₚ_target - panel_length), yₚ_target)
+    ln_r₂_r₁ = log(r₂/r₁)
+    θ₁ = atan(yₚ_target,xₚ_target)
+    θ₂ = atan(yₚ_target,xₚ_target-panel_length)
+    dθ = θ₂ - θ₁
+
+    σ₁,σ₂ = unit_forcing ? (1,1) : (source.σ_start,source.σ_end)
+
+    uₚᵃ = - σ₁ *  (x_end - xₚ_target) / (2π * panel_length) * ln_r₂_r₁ +  σ₁ /  (2π * panel_length) * (panel_length  + yₚ_target * dθ)
+    vₚᵃ = yₚ_target * σ₁ / (2π * panel_length) * ln_r₂_r₁ + σ₁ *  (x_end - xₚ_target) / (2π * panel_length)  * dθ
+
+    uᵃ = uₚᵃ * xₚ_hat_x + vₚᵃ * yₚ_hat_x
+    vᵃ = uₚᵃ * xₚ_hat_y + vₚᵃ * yₚ_hat_y
+
+    uₚᵇ = - σ₂ *  (xₚ_target - x_start) / (2π * panel_length) * ln_r₂_r₁ -  σ₂ /  (2π * panel_length) * (panel_length  + yₚ_target * dθ)
+    vₚᵇ = - yₚ_target * σ₂ / (2π * panel_length) * ln_r₂_r₁ + σ₂ *  (xₚ_target - x_start) / (2π * panel_length)  * dθ
+
+    uᵇ = uₚᵇ * xₚ_hat_x + vₚᵇ * yₚ_hat_x
+    vᵇ = uₚᵇ * xₚ_hat_y + vₚᵇ * yₚ_hat_y
+
+    return uᵃ,vᵃ,uᵇ,vᵇ
+end 
+
+function induced_velocity(target::Panel,source::Panel; unit_forcing=true)
+    return induced_velocity(target,source.singularity,unit_forcing=unit_forcing)
+end 
+
+function induced_velocity(x_target,y_target,source::Panel; unit_forcing=false,return_total_velocity=true)
+    dx_panel = source.x_end - source.x_start
+    dy_panel = source.y_end - source.y_start
+    panel_length = hypot(dx_panel , dy_panel)
+    xₚ_hat_x = dx_panel/panel_length
+    xₚ_hat_y = dy_panel/panel_length
+    yₚ_hat_x = - xₚ_hat_y
+    yₚ_hat_y = xₚ_hat_x
+    x_target_relative = x_target - source.x_start
+    y_target_relative = y_target - source.y_start
+    xₚ_target = x_target_relative * xₚ_hat_x + y_target_relative * xₚ_hat_y
+    yₚ_target = y_target_relative * yₚ_hat_x + y_target_relative * yₚ_hat_y
+
+    r₁ = hypot(xₚ_target, yₚ_target)
+    r₂ = hypot((xₚ_target - panel_length), yₚ_target)
+    ln_r₂_r₁ = log(r₂/r₁)
+    θ₁ = atan(yₚ_target,xₚ_target)
+    θ₂ = atan(yₚ_target,xₚ_target-panel_length)
+    dθ = θ₂ - θ₁
+
+    σ₁,σ₂ = unit_forcing ? (1,1) : (source.σ_start,source.σ_end)
+
+    uₚᵃ = - σ₁ *  (x_end - xₚ_target) / (2π * panel_length) * ln_r₂_r₁ +  σ₁ /  (2π * panel_length) * (panel_length  + yₚ_target * dθ)
+    vₚᵃ = yₚ_target * σ₁ / (2π * panel_length) * ln_r₂_r₁ + σ₁ *  (x_end - xₚ_target) / (2π * panel_length)  * dθ
+
+    uᵃ = uₚᵃ * xₚ_hat_x + vₚᵃ * yₚ_hat_x
+    vᵃ = uₚᵃ * xₚ_hat_y + vₚᵃ * yₚ_hat_y
+
+    uₚᵇ = - σ₂ *  (xₚ_target - x_start) / (2π * panel_length) * ln_r₂_r₁ -  σ₂ /  (2π * panel_length) * (panel_length  + yₚ_target * dθ)
+    vₚᵇ = - yₚ_target * σ₂ / (2π * panel_length) * ln_r₂_r₁ + σ₂ *  (xₚ_target - x_start) / (2π * panel_length)  * dθ
+
+    uᵇ = uₚᵇ * xₚ_hat_x + vₚᵇ * yₚ_hat_x
+    vᵇ = uₚᵇ * xₚ_hat_y + vₚᵇ * yₚ_hat_y
+
+
+    if return_total_velocity
+        return uᵃ + uᵇ, vᵃ + vᵇ
+    else
+        return uᵃ,vᵃ,uᵇ,vᵇ
+    end 
+end 
+
+
+function create_panel(x_start,y_start,x_end,y_end;line_vortex=true)
+    singularity_type = line_vortex ? LinearStrengthLineVortex : LinearStrengthLineSource
+    singularity = singularity_type(x_start,y_start,x_end,y_end,1.,1.)
+    dx = x_end - x_start
+    dy = y_end - y_start
+    panel_length = hypot(dx , dy)
+    x_normal = -dy / panel_length
+    y_normal = dx / panel_length
+    y_tangent = - copy(x_normal)
+    x_tangent = copy(y_normal) 
+    return Panel(x_start,y_start,x_end,y_end,x_normal, y_normal,x_tangent,y_tangent,singularity)
+end
+
+airfoil = Airfoil("naca6409")
+panels = create_panel.(airfoil.x[1:end-1],airfoil.y[1:end-1],airfoil.x[2:end],airfoil.x[2:end])

@@ -46,8 +46,8 @@ macro strengths(singularity,symbol)
     return Meta.parse(ex)
 end
 
-function get_strengths(singularity::T) where T<:LineSingularity
-    symbol = fieldnames(T)[5:6]
+function get_strengths(singularity) 
+    symbol = fieldnames(typeof(T))[5:6]
     symbol_start,symbol_end = @strengths(singularity,symbol)
     return symbol_start, symbol_end
 end 
