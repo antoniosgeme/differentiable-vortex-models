@@ -195,5 +195,18 @@ function create_panel(x_start,y_start,x_end,y_end;line_vortex=true)
     return Panel(x_start,y_start,x_end,y_end,x_normal, y_normal,x_tangent,y_tangent,singularity)
 end
 
+function construct_geometry(airfoil::Airfoil)
+    if sharp_trailing_edge(airfoil)
+        num_panels = length(airfoil.x)-1
+        panels = create_panel.(airfoil.x[1:end-1],airfoil.y[1:end-1],airfoil.x[2:end],airfoil.x[2:end])
+    else 
+        num_panels = length(airfoil.x)
+        panels = Vector{Panel}(undef,num_panels)
+        panels[1:end-1]  = create_panel.(airfoil.x[1:end-1],airfoil.y[1:end-1],airfoil.x[2:end],airfoil.x[2:end])
+        panels[end] = create_panel(airfoil.x[end],airfoil.y[end],airfoil.x[1],airfoil.x[1],line_vortex=false)
+    end 
+    return panels 
+end 
+
 airfoil = Airfoil("naca6409")
-panels = create_panel.(airfoil.x[1:end-1],airfoil.y[1:end-1],airfoil.x[2:end],airfoil.x[2:end])
+panels = construct_geometry(airfoil)
