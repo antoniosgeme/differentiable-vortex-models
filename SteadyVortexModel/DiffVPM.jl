@@ -25,7 +25,7 @@ struct Panel{A,B,C,D,E,F,G,H,I} <: Line
     y_normal::F
     x_tangent::G
     y_tangent::H
-    singularity::I
+    singularities::I
 end 
 
 get_midpoint(p::T where T <: Line) = (p.x_end + p.x_start)/2, (p.y_end + p.y_start)/2 
@@ -61,6 +61,91 @@ struct LinearStrengthLineSource{A,B,C,D,E,F} <: LineSingularity
     σ_end::F
 end
 
+struct ConstantStrengthLineSource{A,B,C,D,E} <: LineSingularity
+    """
+    A constant strength line source starting at (x_start,y_start)
+    and ending at (x_end,y_end) with strength σ. 
+    """
+    x_start::A
+    y_start::B
+    x_end::C
+    y_end::D
+    σ::E
+end 
+
+struct ConstantStrengthLineVortex{A,B,C,D,E} <: LineSingularity
+    """
+    A constant strength line vortex starting at (x_start,y_start)
+    and ending at (x_end,y_end) with strength γ. 
+    """
+    x_start::A
+    y_start::B
+    x_end::C
+    y_end::D
+    γ::E
+end 
+
+function induced_velocity(target::Panel,source::ConstantStrengthLineSource;unit_forcing=true)
+    x_target,y_target = get_midpoint(target)
+    dx_panel = source.x_end - source.x_start
+    dy_panel = source.y_end - source.y_start
+    panel_length = hypot(dx_panel , dy_panel)
+    xₚ_hat_x = dx_panel/panel_length
+    xₚ_hat_y = dy_panel/panel_length
+    yₚ_hat_x = - xₚ_hat_y
+    yₚ_hat_y = xₚ_hat_x
+    x_target_relative = x_target - source.x_start
+    y_target_relative = y_target - source.y_start
+    xₚ_target = x_target_relative * xₚ_hat_x + y_target_relative * xₚ_hat_y
+    yₚ_target = y_target_relative * yₚ_hat_x + y_target_relative * yₚ_hat_y
+
+    r₁ = hypot(xₚ_target, yₚ_target)
+    r₂ = hypot((xₚ_target - panel_length), yₚ_target)
+    ln_r₂_r₁ = log(r₂^2 / r₁^2)
+    θ₁ = atan(yₚ_target,xₚ_target)
+    θ₂ = atan(yₚ_target,xₚ_target-panel_length)
+    dθ = θ₂ - θ₁
+    σ = unit_forcing ? 1 : source.σ
+
+    uₚ = - σ / (4π) * ln_r₂_r₁
+    vₚ = σ / (2π) * dθ
+    u = uₚ * xₚ_hat_x + vₚ * yₚ_hat_x
+    v = uₚ * xₚ_hat_y + vₚ * yₚ_hat_y
+    return u,v,0,0,0,0
+end 
+
+function induced_velocity(target::Panel,source::ConstantStrengthLineVortex;unit_forcing=true)
+    x_target,y_target = get_midpoint(target)
+    dx_panel = source.x_end - source.x_start
+    dy_panel = source.y_end - source.y_start
+    panel_length = hypot(dx_panel , dy_panel)
+    xₚ_hat_x = dx_panel/panel_length
+    xₚ_hat_y = dy_panel/panel_length
+    yₚ_hat_x = - xₚ_hat_y
+    yₚ_hat_y = xₚ_hat_x
+    x_target_relative = x_target - source.x_start
+    y_target_relative = y_target - source.y_start
+    xₚ_target = x_target_relative * xₚ_hat_x + y_target_relative * xₚ_hat_y
+    yₚ_target = y_target_relative * yₚ_hat_x + y_target_relative * yₚ_hat_y
+
+    r₁ = hypot(xₚ_target, yₚ_target)
+    r₂ = hypot((xₚ_target - panel_length), yₚ_target)
+    ln_r₂_r₁ = log(r₂^2 / r₁^2 )
+    θ₁ = atan(yₚ_target,xₚ_target)
+    θ₂ = atan(yₚ_target,xₚ_target-panel_length)
+    dθ = θ₂ - θ₁
+    γ = unit_forcing ? 1 : source.γ
+
+    uₚ = γ / (2π) * dθ
+    vₚ =   γ / (4π) * ln_r₂_r₁
+    u = uₚ * xₚ_hat_x + vₚ * yₚ_hat_x
+    v = uₚ * xₚ_hat_y + vₚ * yₚ_hat_y
+    return u,v,0,0,0,0
+end 
+
+
+
+
 function induced_velocity(target::Panel,source::LinearStrengthLineVortex; unit_forcing=true)
     x_target,y_target = get_midpoint(target)
     dx_panel = source.x_end - source.x_start
@@ -94,7 +179,7 @@ function induced_velocity(target::Panel,source::LinearStrengthLineVortex; unit_f
     uᵇ = uₚᵇ * xₚ_hat_x + vₚᵇ * yₚ_hat_x
     vᵇ = uₚᵇ * xₚ_hat_y + vₚᵇ * yₚ_hat_y
 
-    return uᵃ,vᵃ,uᵇ,vᵇ
+    return uᵃ + uᵇ, vᵃ + vᵇ, uᵃ,vᵃ,uᵇ,vᵇ 
 end 
 
 function induced_velocity(target::Panel,source::LinearStrengthLineSource; unit_forcing=true)
@@ -132,14 +217,27 @@ function induced_velocity(target::Panel,source::LinearStrengthLineSource; unit_f
     uᵇ = uₚᵇ * xₚ_hat_x + vₚᵇ * yₚ_hat_x
     vᵇ = uₚᵇ * xₚ_hat_y + vₚᵇ * yₚ_hat_y
 
-    return uᵃ,vᵃ,uᵇ,vᵇ
+    return uᵃ + uᵇ, vᵃ + vᵇ, uᵃ,vᵃ,uᵇ,vᵇ 
+
+function induced_velocity(target::Panel,source::Panel; unit_forcing=true,return_total_velocity=false)
+    u,v,uᵃ,vᵃ,uᵇ,vᵇ= 0,0,0,0,0,0
+    for singularity in source.singularities
+        u_tmp,v_tmp,uᵃ_tmp,vᵃ_tmp,uᵇ_tmp,vᵇ_tmp = induced_velocity(target,singularity,unit_forcing=unit_forcing)
+        u += u_tmp
+        v+= v_tmp
+        uᵃ += uᵃ_tmp
+        vᵃ += vᵃ_tmp
+        uᵇ += uᵇ_tmp
+        vᵇ += vᵇ_tmp
+    end 
+    if return_total_velocity
+        return u,v
+    else
+        return u,v,uᵃ,vᵃ,uᵇ,vᵇ
+    end 
 end 
 
-function induced_velocity(target::Panel,source::Panel; unit_forcing=true)
-    return induced_velocity(target,source.singularity,unit_forcing=unit_forcing)
-end 
-
-function induced_velocity(x_target,y_target,source::Panel; unit_forcing=false,return_total_velocity=true)
+function induced_velocity(x_target,y_target,source::Panel; unit_forcing=false)
     dx_panel = source.x_end - source.x_start
     dy_panel = source.y_end - source.y_start
     panel_length = hypot(dx_panel , dy_panel)
@@ -173,12 +271,7 @@ function induced_velocity(x_target,y_target,source::Panel; unit_forcing=false,re
     uᵇ = uₚᵇ * xₚ_hat_x + vₚᵇ * yₚ_hat_x
     vᵇ = uₚᵇ * xₚ_hat_y + vₚᵇ * yₚ_hat_y
 
-
-    if return_total_velocity
-        return uᵃ + uᵇ, vᵃ + vᵇ
-    else
-        return uᵃ,vᵃ,uᵇ,vᵇ
-    end 
+    return uᵃ + uᵇ, vᵃ + vᵇ, uᵃ,vᵃ,uᵇ,vᵇ
 end 
 
 
@@ -203,10 +296,46 @@ function construct_geometry(airfoil::Airfoil)
         num_panels = length(airfoil.x)
         panels = Vector{Panel}(undef,num_panels)
         panels[1:end-1]  = create_panel.(airfoil.x[1:end-1],airfoil.y[1:end-1],airfoil.x[2:end],airfoil.x[2:end])
-        panels[end] = create_panel(airfoil.x[end],airfoil.y[end],airfoil.x[1],airfoil.x[1],line_vortex=false)
+        panels[end] = create_panel(airfoil.x[end],airfoil.y[end],airfoil.x[1],airfoil.x[1])
     end 
     return panels 
 end 
 
+function populate_influence_matrix(panels::Vector{Panel},U_freestream,V_freestream=0)
+    N = length(panels)
+    A = zeros(N+1,N+1)
+    for i in 1:N # targets
+
+        for j in 2:N-1 # sources
+            u_j,v_j,uᵃ_j,vᵃ_j,uᵇ_j,vᵇ_j = induced_velocity(panels[i],panels[j])
+            u_j1,v_j1,uᵃ_j1,vᵃ_j1,uᵇ_j1,vᵇ_j1 = induced_velocity(panels[i],panels[j-1])
+        end
+    end
+
+
+
+
+    for (i,collocation) in enumerate(body.collocations)
+        for (j,singularity) in enumerate(body.singularities)
+            u,w = induced_velocity(collocation,singularity)
+            A[i,j] = dot([u,w],[collocation.x_normal,collocation.y_normal])
+        end 
+    end 
+    A[end,1] = 1
+    A[end,end] = 1
+    return A
+end 
+
+function vpm(airfoil::Airfoil,U_freestream,V_freestream)
+    panels = construct_geometry(airfoil)
+    A = populate_influence_matrix(airfoil,U_freestream,V_freestream)
+end
+
 airfoil = Airfoil("naca6409")
 panels = construct_geometry(airfoil)
+
+
+
+
+
+
