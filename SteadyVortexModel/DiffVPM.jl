@@ -111,7 +111,7 @@ function induced_velocity(target::Panel,source::ConstantStrengthLineSource;unit_
     vₚ = σ / (2π) * dθ
     u = uₚ * xₚ_hat_x + vₚ * yₚ_hat_x
     v = uₚ * xₚ_hat_y + vₚ * yₚ_hat_y
-    return u,v,0,0,0,0
+    return u,v
 end 
 
 function induced_velocity(target::Panel,source::ConstantStrengthLineVortex;unit_forcing=true)
@@ -140,7 +140,7 @@ function induced_velocity(target::Panel,source::ConstantStrengthLineVortex;unit_
     vₚ =   γ / (4π) * ln_r₂_r₁
     u = uₚ * xₚ_hat_x + vₚ * yₚ_hat_x
     v = uₚ * xₚ_hat_y + vₚ * yₚ_hat_y
-    return u,v,0,0,0,0
+    return u,v
 end 
 
 
@@ -179,7 +179,7 @@ function induced_velocity(target::Panel,source::LinearStrengthLineVortex; unit_f
     uᵇ = uₚᵇ * xₚ_hat_x + vₚᵇ * yₚ_hat_x
     vᵇ = uₚᵇ * xₚ_hat_y + vₚᵇ * yₚ_hat_y
 
-    return uᵃ + uᵇ, vᵃ + vᵇ, uᵃ,vᵃ,uᵇ,vᵇ 
+    return uᵃ + uᵇ, vᵃ + vᵇ
 end 
 
 function induced_velocity(target::Panel,source::LinearStrengthLineSource; unit_forcing=true)
@@ -217,24 +217,18 @@ function induced_velocity(target::Panel,source::LinearStrengthLineSource; unit_f
     uᵇ = uₚᵇ * xₚ_hat_x + vₚᵇ * yₚ_hat_x
     vᵇ = uₚᵇ * xₚ_hat_y + vₚᵇ * yₚ_hat_y
 
-    return uᵃ + uᵇ, vᵃ + vᵇ, uᵃ,vᵃ,uᵇ,vᵇ 
+    return uᵃ + uᵇ, vᵃ + vᵇ
+end 
 
-function induced_velocity(target::Panel,source::Panel; unit_forcing=true,return_total_velocity=false)
-    u,v,uᵃ,vᵃ,uᵇ,vᵇ= 0,0,0,0,0,0
+function induced_velocity(target::Panel,source::Panel; unit_forcing=true)
+    u,v = 0,0
     for singularity in source.singularities
-        u_tmp,v_tmp,uᵃ_tmp,vᵃ_tmp,uᵇ_tmp,vᵇ_tmp = induced_velocity(target,singularity,unit_forcing=unit_forcing)
+        u_tmp,v_tmp = induced_velocity(target,singularity,unit_forcing=unit_forcing)
         u += u_tmp
         v+= v_tmp
-        uᵃ += uᵃ_tmp
-        vᵃ += vᵃ_tmp
-        uᵇ += uᵇ_tmp
-        vᵇ += vᵇ_tmp
     end 
-    if return_total_velocity
-        return u,v
-    else
-        return u,v,uᵃ,vᵃ,uᵇ,vᵇ
-    end 
+   
+    return u,v
 end 
 
 function induced_velocity(x_target,y_target,source::Panel; unit_forcing=false)
@@ -271,8 +265,15 @@ function induced_velocity(x_target,y_target,source::Panel; unit_forcing=false)
     uᵇ = uₚᵇ * xₚ_hat_x + vₚᵇ * yₚ_hat_x
     vᵇ = uₚᵇ * xₚ_hat_y + vₚᵇ * yₚ_hat_y
 
-    return uᵃ + uᵇ, vᵃ + vᵇ, uᵃ,vᵃ,uᵇ,vᵇ
+    return uᵃ + uᵇ, vᵃ + vᵇ
 end 
+
+function induced_normal_velocity(target::Panel,source::Panel; unit_forcing=true)
+    u,v = induced_velocity(source,target,unit_forcing=unit_forcing)
+    u_normal = u * target.x_normal + v * target.y_normal
+    return u_normal
+end 
+
 
 
 function create_panel(x_start,y_start,x_end,y_end;line_vortex=true)
@@ -331,8 +332,60 @@ function vpm(airfoil::Airfoil,U_freestream,V_freestream)
     A = populate_influence_matrix(airfoil,U_freestream,V_freestream)
 end
 
+
+using JuMP, Ipopt
+
 airfoil = Airfoil("naca6409")
-panels = construct_geometry(airfoil)
+
+N = length(airfoil.x)
+panels = Vector{Panel}(undef,N)
+
+model = Model(Ipopt.Optimizer)
+
+@variable(model,γ[1:N])
+@variable(model,γ_TE)
+@variable(model,σ_TE)
+
+for i in 1:N-1
+    x_start = airfoil.x[i]
+    y_start = airfoil.y[i]
+    x_end = airfoil.x[i+1]
+    y_end = airfoil.y[i+1]
+    singularity = LinearStrengthLineVortex(x_start,y_start,x_end,y_end,γ[i],γ[i+1])
+    dx = x_end - x_start
+    dy = y_end - y_start
+    panel_length = hypot(dx , dy)
+    x_normal = -dy / panel_length
+    y_normal = dx / panel_length
+    y_tangent = - copy(x_normal)
+    x_tangent = copy(y_normal) 
+    panels[i] = Panel(x_start,y_start,x_end,y_end,x_normal, y_normal,x_tangent,y_tangent,[singularity])
+end 
+
+x_start = airfoil.x[end]
+y_start = airfoil.y[end]
+x_end = airfoil.x[1]
+y_end = airfoil.y[1]
+singularity1 = ConstantStrengthLineSource(x_start,y_start,x_end,y_end,σ_TE)
+singularity2 = ConstantStrengthLineVortex(x_start,y_start,x_end,y_end,γ_TE)
+dx = x_end - x_start
+dy = y_end - y_start
+panel_length = hypot(dx , dy)
+x_normal = -dy / panel_length
+y_normal = dx / panel_length
+y_tangent = - copy(x_normal)
+x_tangent = copy(y_normal) 
+panels[end] = Panel(x_start,y_start,x_end,y_end,x_normal, y_normal,x_tangent,y_tangent,[singularity1,singularity2])
+
+normal_velocities = zeros(N)
+
+for (i,target) in enumerate(panels)
+    for source in panels
+        normal_velocities[i] = induced_normal_velocity(target,source,unit_forcing=false)
+    end 
+end  
+
+
 
 
 
