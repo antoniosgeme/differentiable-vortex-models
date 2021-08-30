@@ -2,7 +2,7 @@ using Plots
 using LinearAlgebra
 
 abstract type Point end 
-abstract type Body end 
+abstract type Body end  
 
 struct Kinematics
     X₀::Vector{Float64} # Location of pitch axis in inertial frame
@@ -396,8 +396,8 @@ end
 function populate_RHS(flow::Flowfield,kinematics::Kinematics,nstep)
     RHS = zeros(length(flow.wing.vortices)+1)
     α = kinematics.α[nstep]
-    R = [cos(α) -sin(α)
-         sin(α)  cos(α)]
+    R = [cosd(α) -sind(α)
+         sind(α)  cosd(α)]
 
     for (i,col) in enumerate(flow.wing.collocations)
         uₖ,vₖ = R*[-kinematics.U₀[nstep],-kinematics.V₀[nstep]] + [-kinematics.α̇[nstep]*col.y_wing,kinematics.α̇[nstep]*col.x_wing]
@@ -493,23 +493,27 @@ function wake_rollup!(flow::Flowfield,kinematcs::Kinematics,Δt::Float64,nstep)
 end
 
 function runme()
-    foil = airfoil(leading_edge_shedding=false,α=30) 
+    foil = airfoil(leading_edge_shedding=true,α=30) 
     Δt = 0.01
+    time_steps  = 300
+    final_time = time_steps * Δt
     mytime = collect(0:Δt:15)
-    AoA = 30*ones(length(mytime))#10*sin.(3*mytime)#
-    kinematics = set_kinematics(mytime,-1,0,AoA,foil)
+    AoA = 20*sin.(10*mytime)#30*ones(length(mytime))#
+    kinematics = set_kinematics(mytime,-1,1,AoA,foil)
     gust = top_hat(kinematics.X₀)
     flow = Flowfield(foil,Vortex[],gust)
     movewing!(flow,kinematics,1)
     draw(flow)
-    for nstep in 2:50
+    for nstep in 2:time_steps
         movewing!(flow,kinematics,nstep)
         placevortex!(flow,kinematics,nstep)
-        enforce_no_throughflow!(flow,kinematics,nstep)
+        draw(flow,inertial_frame=true)
+        #enforce_no_throughflow!(flow,kinematics,nstep)
         wake_rollup!(flow,kinematics,Δt,nstep)
-        draw(flow)
+       # draw(flow,inertial_frame=true)
     end 
     return flow,kinematics
 end  
 
 
+# Possible bugs
