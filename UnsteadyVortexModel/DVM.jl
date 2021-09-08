@@ -1,8 +1,6 @@
 using Plots
 using LinearAlgebra
 
-abstract type Point end 
-abstract type Body end  
 
 struct Kinematics
     X₀::Vector{Float64} # Location of pitch axis in inertial frame
@@ -16,7 +14,7 @@ end
 
 
 
-mutable struct CollocationPoint{T} <: Point
+mutable struct CollocationPoint{T} 
     x_wing::T
     y_wing::T
     x_inertial::T
@@ -33,7 +31,7 @@ mutable struct CollocationPoint{T} <: Point
     y_tangent_inertial::T
 end 
 
-mutable struct Vortex{T} <: Point
+mutable struct Vortex{T}
     x_wing::T
     y_wing::T
     x_inertial::T
@@ -51,7 +49,7 @@ mutable struct Vortex{T} <: Point
     Γ::T
 end 
 
-mutable struct Airfoil <: Body 
+mutable struct Airfoil 
     name::String
     chord::Float64
     pitch_axis::Float64 # x coordinate of litching axis in wing frame as a fraction of chord
@@ -89,6 +87,7 @@ function set_kinematics(time::Vector{Float64},U∞::Number,V∞::Number,α::Vect
 end
 
 function gradient1D(f::Vector{<:Number},x::Vector{<:Number})
+    @assert length(f) == length(x) "Input vectors must have the same length"
     df_dx = similar(f)
     for i in 2:length(f)-1
         df_dx[i] = (f[i-1] - f[i+1])/(x[i-1] - x[i+1])
@@ -143,7 +142,7 @@ function wing_to_inertial_velocity(x_wing,y_wing,U∞,W∞,α,α̇ )
     Ṙ = α̇  * [-sind(α)  cosd(α)
               -cosd(α) -sind(α)]
     
-    u_inertial,w_inertial = Ṙ * [x_wing,y_wing] + [U∞,W∞]
+    u_inertial,v_inertial = Ṙ * [x_wing,y_wing] + [U∞,W∞]
     return u_inertial,v_inertial
 end 
 
@@ -299,6 +298,7 @@ function draw(flow::Flowfield;inertial_frame=true)
     scatter!(x_col,y_col,aspect_ratio=:equal,label="Collocation Points")
     scatter!(x_wake_vortices,y_wake_vortices,aspect_ratio=:equal,label="Shed Vortices")
     display(h)
+
 end 
 
 function induced_velocity(target,source::Vortex;unit_forcing=true,inertial_frame=false)
@@ -311,7 +311,7 @@ function induced_velocity(target,source::Vortex;unit_forcing=true,inertial_frame
     source_x = getfield(source,1+num)
     source_y = getfield(source,2+num)
 
-    Γ = unit_forcing ? 1 : source.Γ
+    Γ = unit_forcing ? 1. : source.Γ
     X = [target_x - source_x ,target_y - source_y]
     r² = (target_x - source_x)^2 + (target_y - source_y)^2
     C = Γ/(2π*r²)
@@ -493,27 +493,34 @@ function wake_rollup!(flow::Flowfield,kinematcs::Kinematics,Δt::Float64,nstep)
 end
 
 function runme()
-    foil = airfoil(leading_edge_shedding=true,α=30) 
-    Δt = 0.01
-    time_steps  = 300
+    chord = 0.0762
+    Re = 1e4
+    ν = 1e-6
+    N = 50
+    foil = airfoil(leading_edge_shedding=true,α=30,chord=chord,n_panels=N)
+    final_speed = Re * ν / chord
+    Δt =  chord/N * 2 / final_speed
+    time_steps  = 50
     final_time = time_steps * Δt
-    mytime = collect(0:Δt:15)
-    AoA = 20*sin.(10*mytime)#30*ones(length(mytime))#
-    kinematics = set_kinematics(mytime,-1,1,AoA,foil)
+    mytime = collect(0:Δt:final_time)
+    AoA = 30*ones(length(mytime))#20*sin.(10*mytime)#
+    kinematics = set_kinematics(mytime,-final_speed,0,AoA,foil)
     gust = top_hat(kinematics.X₀)
     flow = Flowfield(foil,Vortex[],gust)
     movewing!(flow,kinematics,1)
-    draw(flow)
+    
     for nstep in 2:time_steps
         movewing!(flow,kinematics,nstep)
         placevortex!(flow,kinematics,nstep)
-        draw(flow,inertial_frame=true)
-        #enforce_no_throughflow!(flow,kinematics,nstep)
-        wake_rollup!(flow,kinematics,Δt,nstep)
+        enforce_no_throughflow!(flow,kinematics,nstep)
+        wake_rollup!(flow,kinematics,Δt,nstep) 
        # draw(flow,inertial_frame=true)
     end 
-    return flow,kinematics
+    draw(flow)
+    #return flow,kinematics
 end  
 
-
-# Possible bugs
+# TODO
+# 1) Fix pitching 
+# 2) Add kinematics infleunce on LEV shedding
+# 3) Add gust influence
